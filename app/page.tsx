@@ -12,6 +12,8 @@ const demoCases = [
 ];
 
 export default function Home() {
+  const [session, setSession] = useState<{name:string;role:string;workspace:string;company:string} | null>(null);
+  const [loginError, setLoginError] = useState("");
   const [caseItems, setCaseItems] = useState(demoCases);
   const [active, setActive] = useState(demoCases[0]);
   const [apiOnline, setApiOnline] = useState(false);
@@ -21,28 +23,38 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const visible = useMemo(() => caseItems.filter((item) => !resolved.includes(item.id) && (filter === "All cases" || item.severity === filter) && `${item.id} ${item.user} ${item.reason}`.toLowerCase().includes(query.toLowerCase())), [query, filter, resolved, caseItems]);
   useEffect(() => {
+    const saved=localStorage.getItem("safeconnect_user"); if (saved && localStorage.getItem("safeconnect_access_v2")) setSession(JSON.parse(saved));
+  }, []);
+  useEffect(() => {
+    if (!session) return;
     const connect = async () => {
       try {
         await api.health(); setApiOnline(true);
-        if (!localStorage.getItem("safeconnect_access") && ["localhost","127.0.0.1"].includes(location.hostname)) await api.login("moderator","SafeConnect123!");
         const payload: { results?: ApiCase[] } = await api.cases();
         const records=(payload.results || []).map((item) => { const name=item.report.reported_user_detail.display_name || item.report.reported_user_detail.username; return { backendId:item.id, id:item.report.public_id, user:name, initials:name.split(" ").map((part:string)=>part[0]).join("").slice(0,2).toUpperCase(), reason:item.report.category.replace("_"," "), risk:item.report.risk_score, severity:item.priority[0].toUpperCase()+item.priority.slice(1), time:"Live", channel:"Django API", color:"#6654d9" }; });
         if (records.length) { setCaseItems(records); setActive(records[0]); }
       } catch { setApiOnline(false); }
     };
     connect();
-  }, []);
+  }, [session]);
   const act = async (message: string, resolve = false, actionName?: string) => { if (actionName && "backendId" in active) { try { await api.act((active as typeof active & {backendId:number}).backendId, actionName); } catch { setToast("API action failed — check moderator login"); return; } } if (resolve) setResolved((items) => [...items, active.id]); setToast(message); setTimeout(() => setToast(""), 2600); };
+
+  const signIn = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setLoginError(""); const data=new FormData(event.currentTarget);
+    try { const result=await api.login(String(data.get("workspace")),String(data.get("username")),String(data.get("password"))); setSession(result.user); }
+    catch (error) { setLoginError(error instanceof Error ? error.message : "Unable to sign in"); }
+  };
+  if (!session) return <main className="login-page"><section className="login-story"><div className="brand login-brand"><span className="brand-mark">S</span><span>SafeConnect</span></div><div className="story-copy"><span className="secure-label">ENTERPRISE TRUST &amp; SAFETY</span><h1>Your community.<br/><em>Protected.</em></h1><p>One command center for the people, policies, and decisions that keep your platform safe.</p><div className="trust-points"><span><b>99.99%</b> platform uptime</span><span><b>&lt; 9 min</b> median response</span><span><b>Complete</b> auditability</span></div></div><div className="story-orbit"><i/><i/><i/></div><small className="story-foot">SOC 2 READY · ENCRYPTED · TENANT ISOLATED</small></section><section className="login-panel"><div className="login-box"><span className="step">SECURE WORKSPACE ACCESS</span><h2>Welcome back</h2><p>Sign in with your company credentials.</p><form onSubmit={signIn}><label>Company workspace<input name="workspace" defaultValue="nova-social" placeholder="your-company" required/></label><label>Employee username<input name="username" defaultValue="moderator" placeholder="name@company.com" required/></label><label>Password<div className="password-wrap"><input name="password" type="password" defaultValue="SafeConnect123!" required/><span>◉</span></div></label><div className="login-meta"><label><input type="checkbox" defaultChecked/> Keep me signed in</label><button type="button">Forgot password?</button></div>{loginError && <div className="login-error">{loginError}</div>}<button className="login-submit" type="submit">Enter workspace <span>→</span></button></form><div className="sso-divider"><span>or continue with company SSO</span></div><div className="sso-row"><button>G&nbsp; Google</button><button>▦&nbsp; Microsoft</button></div><small className="demo-hint">Demo access is pre-filled for Nova Social.</small></div></section></main>;
 
   return <main className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">S</span><span>SafeConnect</span></div>
       <nav><p className="nav-label">Workspace</p><button className="nav-item active"><span>⌂</span> Overview</button><button className="nav-item"><span>◎</span> Case queue <b>12</b></button><button className="nav-item"><span>♧</span> User reports</button><button className="nav-item"><span>◫</span> Appeals</button><p className="nav-label second">Intelligence</p><button className="nav-item"><span>⌁</span> Trends</button><button className="nav-item"><span>◇</span> Audit log</button><button className="nav-item"><span>⚙</span> Policy center</button></nav>
       <div className="sidebar-card"><span className="pulse-dot"/><div><strong>{apiOnline ? "API connected" : "Demo mode"}</strong><small>{apiOnline ? "Django services operational" : "Start backend on port 8000"}</small></div></div>
-      <div className="profile"><span className="avatar small">JD</span><div><strong>Jordan Davis</strong><small>Senior moderator</small></div><span>•••</span></div>
+      <button className="profile profile-button" onClick={() => {api.logout();setSession(null)}}><span className="avatar small">{session.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</span><div><strong>{session.name}</strong><small>{session.company} · {session.role}</small></div><span>↪</span></button>
     </aside>
     <section className="workspace">
-      <header className="topbar"><div><p className="eyebrow">TRUST &amp; SAFETY / OVERVIEW</p><h1>Good morning, Jordan.</h1></div><div className="top-actions"><button className="icon-button" aria-label="Notifications">♢<i/></button><button className="primary" onClick={() => act("Report intake opened")}>＋ New report</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">{session.company.toUpperCase()} / TRUST &amp; SAFETY / OVERVIEW</p><h1>Good morning, {session.name.split(" ")[0]}.</h1></div><div className="top-actions"><button className="icon-button" aria-label="Notifications">♢<i/></button><button className="primary" onClick={() => act("Report intake opened")}>＋ New report</button></div></header>
       <div className="metrics">
         <article><div className="metric-head"><span>Open cases</span><b className="badge violet">Live</b></div><strong>48</strong><p><em>↓ 12%</em> from last week</p><div className="spark"><i/><i/><i/><i/><i/><i/></div></article>
         <article><div className="metric-head"><span>Critical priority</span><b className="badge red">Action</b></div><strong>7</strong><p><em className="red-text">↑ 2</em> since yesterday</p><div className="spark red-spark"><i/><i/><i/><i/><i/><i/></div></article>

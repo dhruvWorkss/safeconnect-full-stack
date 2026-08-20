@@ -2,15 +2,25 @@ import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+class Organization(models.Model):
+    name=models.CharField(max_length=120)
+    slug=models.SlugField(max_length=80,unique=True,db_index=True)
+    allowed_email_domain=models.CharField(max_length=120,blank=True)
+    is_active=models.BooleanField(default=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    def __str__(self): return self.name
+
 class User(AbstractUser):
     class Role(models.TextChoices): USER="user","User"; MODERATOR="moderator","Moderator"; ADMIN="admin","Admin"
     role=models.CharField(max_length=16,choices=Role.choices,default=Role.USER,db_index=True)
     display_name=models.CharField(max_length=120,blank=True)
+    organization=models.ForeignKey(Organization,on_delete=models.PROTECT,null=True,blank=True,related_name="members")
 
 class Report(models.Model):
     class Category(models.TextChoices): HARASSMENT="harassment","Harassment"; THREAT="threat","Threat"; HATE="hate","Hate speech"; SPAM="spam","Spam"; IMPERSONATION="impersonation","Impersonation"; OTHER="other","Other"
     class Status(models.TextChoices): OPEN="open","Open"; REVIEWING="reviewing","Reviewing"; RESOLVED="resolved","Resolved"; DISMISSED="dismissed","Dismissed"
     public_id=models.CharField(max_length=16,unique=True,editable=False,db_index=True)
+    organization=models.ForeignKey(Organization,on_delete=models.CASCADE,null=True,related_name="reports")
     reporter=models.ForeignKey(User,on_delete=models.CASCADE,related_name="reports_made")
     reported_user=models.ForeignKey(User,on_delete=models.CASCADE,related_name="reports_received")
     category=models.CharField(max_length=24,choices=Category.choices,db_index=True)
@@ -32,6 +42,7 @@ class ModerationCase(models.Model):
     status=models.CharField(max_length=16,choices=Report.Status.choices,default=Report.Status.OPEN,db_index=True)
     priority=models.CharField(max_length=12,choices=[("low","Low"),("medium","Medium"),("high","High"),("critical","Critical")],default="medium",db_index=True)
     resolution_notes=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True); updated_at=models.DateTimeField(auto_now=True)
+    class Meta: ordering=["-report__risk_score","-created_at"]
 
 class ModerationAction(models.Model):
     case=models.ForeignKey(ModerationCase,on_delete=models.CASCADE,related_name="actions")
@@ -40,6 +51,7 @@ class ModerationAction(models.Model):
     notes=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True)
 
 class Block(models.Model):
+    organization=models.ForeignKey(Organization,on_delete=models.CASCADE,null=True,related_name="blocks")
     blocker=models.ForeignKey(User,on_delete=models.CASCADE,related_name="blocks_created")
     blocked=models.ForeignKey(User,on_delete=models.CASCADE,related_name="blocked_by")
     created_at=models.DateTimeField(auto_now_add=True)
@@ -47,11 +59,13 @@ class Block(models.Model):
         constraints=[models.UniqueConstraint(fields=["blocker","blocked"],name="unique_block")]
 
 class Notification(models.Model):
+    organization=models.ForeignKey(Organization,on_delete=models.CASCADE,null=True,related_name="notifications")
     user=models.ForeignKey(User,on_delete=models.CASCADE,related_name="notifications")
     message=models.CharField(max_length=255); read=models.BooleanField(default=False,db_index=True); created_at=models.DateTimeField(auto_now_add=True)
     class Meta: ordering=["-created_at"]
 
 class AuditLog(models.Model):
+    organization=models.ForeignKey(Organization,on_delete=models.CASCADE,null=True,related_name="audit_logs")
     actor=models.ForeignKey(User,on_delete=models.SET_NULL,null=True)
     event=models.CharField(max_length=80,db_index=True); target_type=models.CharField(max_length=40); target_id=models.CharField(max_length=64); metadata=models.JSONField(default=dict,blank=True); created_at=models.DateTimeField(auto_now_add=True,db_index=True)
     class Meta: ordering=["-created_at"]

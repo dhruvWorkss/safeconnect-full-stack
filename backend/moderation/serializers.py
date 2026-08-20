@@ -1,18 +1,20 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from .models import AuditLog, Block, ModerationAction, ModerationCase, Notification, Report
+from .models import AuditLog, Block, ModerationAction, ModerationCase, Notification, Organization, Report
 User=get_user_model()
 class UserSerializer(serializers.ModelSerializer):
-    class Meta: model=User; fields=["id","username","email","display_name","role"]
+    organization=serializers.SlugRelatedField(read_only=True,slug_field="slug")
+    class Meta: model=User; fields=["id","username","email","display_name","role","organization"]
 class RegisterSerializer(serializers.ModelSerializer):
     password=serializers.CharField(write_only=True,min_length=8)
-    class Meta: model=User; fields=["id","username","email","display_name","password"]
+    class Meta: model=User; fields=["id","username","email","display_name","role","password"]
     def create(self,data): return User.objects.create_user(**data)
 class ReportSerializer(serializers.ModelSerializer):
     reporter=UserSerializer(read_only=True); reported_user_detail=UserSerializer(source="reported_user",read_only=True)
     class Meta: model=Report; fields=["id","public_id","reporter","reported_user","reported_user_detail","category","description","evidence_url","status","risk_score","created_at","updated_at"]; read_only_fields=["public_id","status","risk_score"]
     def validate_reported_user(self,value):
         if value==self.context["request"].user: raise serializers.ValidationError("You cannot report yourself.")
+        if value.organization_id!=self.context["request"].user.organization_id: raise serializers.ValidationError("User does not belong to your company workspace.")
         return value
     def validate(self,attrs):
         request=self.context["request"]
@@ -23,6 +25,7 @@ class BlockSerializer(serializers.ModelSerializer):
     class Meta: model=Block; fields=["id","blocker","blocked","created_at"]; read_only_fields=["blocker"]
     def validate_blocked(self,value):
         if value==self.context["request"].user: raise serializers.ValidationError("You cannot block yourself.")
+        if value.organization_id!=self.context["request"].user.organization_id: raise serializers.ValidationError("User does not belong to your company workspace.")
         return value
 class ActionSerializer(serializers.ModelSerializer):
     actor=UserSerializer(read_only=True)

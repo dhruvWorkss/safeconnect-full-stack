@@ -15,7 +15,7 @@ SafeConnect is a full-stack trust and safety platform for social-media companies
 | Employee username | `moderator` |
 | Password | `SafeConnect123!` |
 
-The backend runs on Render's free tier and may need up to 50 seconds to wake after inactivity.
+These credentials are also shown on the sign-in screen. The backend runs on Render's free tier and may need up to 50 seconds to wake after inactivity.
 
 ## Features
 
@@ -29,6 +29,7 @@ The backend runs on Render's free tier and may need up to 50 seconds to wake aft
 - User blocking, notifications, and immutable audit events
 - Responsive moderator dashboard for desktop, tablet, and mobile
 - PostgreSQL persistence, Redis caching/rate limiting, and Celery support
+- Hardened production settings: HSTS, SSL redirect, secure cookies, and enforced password validation
 - Unit and integration tests for authentication, validation, permissions, and workflow edge cases
 
 ## Technology
@@ -63,7 +64,7 @@ The backend runs on Render's free tier and may need up to 50 seconds to wake aft
 
 ### Requirements
 
-- Node.js 20+
+- Node.js 22.13+
 - Python 3.12+
 - Docker Desktop (recommended for the complete stack)
 
@@ -125,16 +126,37 @@ Authorization: Bearer <access-token>
 
 ```bash
 cd backend
-pytest
+pytest                 # 7 tests
 ```
 
 The test suite covers workspace authentication, tenant isolation, report validation, duplicate reports, moderator permissions, moderation actions, and audit-log creation.
+
+Frontend checks:
+
+```bash
+npx tsc --noEmit       # type check
+npm run build          # production build
+```
+
+## Security
+
+Production settings are enforced whenever `DEBUG` is off:
+
+- `DJANGO_SECRET_KEY` is required — the app refuses to start without it rather than falling back to a development key
+- HSTS (1 year, subdomains, preload), SSL redirect, and secure session/CSRF cookies
+- `SECURE_PROXY_SSL_HEADER` is set so the SSL redirect works behind Render's TLS-terminating proxy
+- Django's full password-validator set is enabled
+- JWT access tokens last 30 minutes; refresh tokens rotate and are blacklisted after use
+- DRF throttling caps anonymous requests at 30/min and authenticated requests at 120/min
+
+`python manage.py check --deploy` reports no issues.
 
 ## Deployment
 
 - `render.yaml` provisions the Django web service and PostgreSQL database on Render.
 - The frontend uses a same-origin server proxy at `/api/backend/*` to communicate securely with the deployed Django API.
 - Production CORS and allowed-host settings are restricted to the deployed SafeConnect domains.
+- Required backend environment variables: `DATABASE_URL`, `DJANGO_SECRET_KEY`, `DEBUG=0`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`. `render.yaml` wires all five, generating the secret key automatically.
 
 ## Portfolio summary
 

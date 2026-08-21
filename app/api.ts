@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://safeconnect-api-qyfu.onrender.com/api";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api/backend";
 
 export type ApiCase = {
   id: number;

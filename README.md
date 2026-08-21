@@ -48,14 +48,15 @@ The backend runs on Render's free tier and may need up to 50 seconds to wake aft
 ```text
 .
 ├── app/                 # React/TypeScript dashboard and API proxy
+├── worker/              # Cloudflare Worker entry point for the frontend
 ├── backend/
 │   ├── moderation/      # Models, serializers, permissions, views, and tests
 │   ├── safeconnect/     # Django configuration, URLs, Celery, and WSGI
+│   ├── Dockerfile       # Django production container
 │   └── manage.py
 ├── public/              # Frontend static assets
 ├── docker-compose.yml   # Local PostgreSQL, Redis, backend, and worker services
-├── render.yaml          # Render backend and PostgreSQL blueprint
-└── backend/Dockerfile   # Django production container
+└── render.yaml          # Render backend and PostgreSQL blueprint
 ```
 
 ## Run locally

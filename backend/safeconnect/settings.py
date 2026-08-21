@@ -1,4 +1,5 @@
 import os
+import dj_database_url
 from datetime import timedelta
 from pathlib import Path
 
@@ -11,7 +12,9 @@ MIDDLEWARE = ["django.middleware.security.SecurityMiddleware","corsheaders.middl
 ROOT_URLCONF = "safeconnect.urls"
 TEMPLATES = [{"BACKEND":"django.template.backends.django.DjangoTemplates","DIRS":[],"APP_DIRS":True,"OPTIONS":{"context_processors":["django.template.context_processors.request","django.contrib.auth.context_processors.auth","django.contrib.messages.context_processors.messages"]}}]
 WSGI_APPLICATION = "safeconnect.wsgi.application"
-if os.getenv("POSTGRES_DB"):
+if os.getenv("DATABASE_URL"):
+    DATABASES = {"default": dj_database_url.config(conn_max_age=600,conn_health_checks=True,ssl_require=not DEBUG)}
+elif os.getenv("POSTGRES_DB"):
     DATABASES = {"default":{"ENGINE":"django.db.backends.postgresql","NAME":os.getenv("POSTGRES_DB"),"USER":os.getenv("POSTGRES_USER"),"PASSWORD":os.getenv("POSTGRES_PASSWORD"),"HOST":os.getenv("POSTGRES_HOST","db"),"PORT":os.getenv("POSTGRES_PORT","5432")}}
 else:
     DATABASES = {"default":{"ENGINE":"django.db.backends.sqlite3","NAME":BASE_DIR / "db.sqlite3"}}

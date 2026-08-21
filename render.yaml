@@ -17,7 +17,7 @@ services:
       - key: DEBUG
         value: "0"
       - key: ALLOWED_HOSTS
-        value: safeconnect-api.onrender.com
+        value: safeconnect-api-qyfu.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         value: https://safeconnect-trust-safety.luffyy1707.chatgpt.site
 

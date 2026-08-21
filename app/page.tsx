@@ -11,6 +11,13 @@ const demoCases = [
   { id: "SC-2816", user: "Aisha Khan", initials: "AK", reason: "Repeated spam", risk: 34, severity: "Low", time: "1h ago", channel: "Community", color: "#3e9a7b" },
 ];
 
+const greeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+};
+
 export default function Home() {
   const [session, setSession] = useState<{name:string;role:string;workspace:string;company:string} | null>(null);
   const [loginError, setLoginError] = useState("");
@@ -24,6 +31,13 @@ export default function Home() {
   const [activeNav, setActiveNav] = useState("Overview");
   const [reportOpen, setReportOpen] = useState(false);
   const visible = useMemo(() => caseItems.filter((item) => !resolved.includes(item.id) && (filter === "All cases" || item.severity === filter) && `${item.id} ${item.user} ${item.reason}`.toLowerCase().includes(query.toLowerCase())), [query, filter, resolved, caseItems]);
+  const stats = useMemo(() => {
+    const open = caseItems.filter((item) => !resolved.includes(item.id));
+    const critical = open.filter((item) => item.severity === "Critical").length;
+    const highestRisk = open.reduce((peak, item) => Math.max(peak, item.risk), 0);
+    const rate = caseItems.length ? Math.round((resolved.length / caseItems.length) * 100) : 0;
+    return { open: open.length, critical, highestRisk, rate };
+  }, [caseItems, resolved]);
   useEffect(() => {
     const saved=localStorage.getItem("safeconnect_user"); if (saved && localStorage.getItem("safeconnect_access_v2")) setSession(JSON.parse(saved));
   }, []);
@@ -41,6 +55,13 @@ export default function Home() {
   }, [session]);
   const act = async (message: string, resolve = false, actionName?: string) => { if (actionName && "backendId" in active) { try { await api.act((active as typeof active & {backendId:number}).backendId, actionName); } catch { setToast("API action failed — check moderator login"); return; } } if (resolve) setResolved((items) => [...items, active.id]); setToast(message); setTimeout(() => setToast(""), 2600); };
 
+  useEffect(() => {
+    if (!reportOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setReportOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reportOpen]);
+
   const signIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setLoginError(""); const data=new FormData(event.currentTarget);
     try { const result=await api.login(String(data.get("workspace")),String(data.get("username")),String(data.get("password"))); setSession(result.user); }
@@ -49,7 +70,7 @@ export default function Home() {
   const navigate = (name: string) => { setActiveNav(name); if (name === "Case queue") { setFilter("All cases"); setQuery(""); } setToast(`${name} view opened`); setTimeout(() => setToast(""), 1800); };
   const showNotifications = async () => { try { const data=await api.notifications(); setToast(`${data.count ?? data.results?.length ?? 0} notifications in your workspace`); } catch { setToast("Unable to load notifications"); } setTimeout(() => setToast(""),2600); };
   const submitReport = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const data=new FormData(event.currentTarget); if (!("reportedUserId" in active)) { setToast("Select a live Django case first"); return; } try { await api.createReport((active as typeof active & {reportedUserId:number}).reportedUserId,String(data.get("category")),String(data.get("description"))); setReportOpen(false); setToast("New report created and added to moderation workflow"); } catch { setToast("This active report may already exist; choose another category"); } setTimeout(()=>setToast(""),3200); };
-  if (!session) return <main className="login-page"><section className="login-story"><div className="brand login-brand"><span className="brand-mark">S</span><span>SafeConnect</span></div><div className="story-copy"><span className="secure-label">ENTERPRISE TRUST &amp; SAFETY</span><h1>Your community.<br/><em>Protected.</em></h1><p>One command center for the people, policies, and decisions that keep your platform safe.</p><div className="trust-points"><span><b>99.99%</b> platform uptime</span><span><b>&lt; 9 min</b> median response</span><span><b>Complete</b> auditability</span></div></div><div className="story-orbit"><i/><i/><i/></div><small className="story-foot">SOC 2 READY · ENCRYPTED · TENANT ISOLATED</small></section><section className="login-panel"><div className="login-box"><span className="step">SECURE WORKSPACE ACCESS</span><h2>Welcome back</h2><p>Sign in with your company credentials.</p><form onSubmit={signIn}><label>Company workspace<input name="workspace" defaultValue="nova-social" placeholder="your-company" required/></label><label>Employee username<input name="username" defaultValue="moderator" placeholder="name@company.com" required/></label><label>Password<div className="password-wrap"><input name="password" type="password" defaultValue="SafeConnect123!" required/><span>◉</span></div></label><div className="login-meta"><label><input type="checkbox" defaultChecked/> Keep me signed in</label><button type="button">Forgot password?</button></div>{loginError && <div className="login-error">{loginError}</div>}<button className="login-submit" type="submit">Enter workspace <span>→</span></button></form><div className="sso-divider"><span>or continue with company SSO</span></div><div className="sso-row"><button>G&nbsp; Google</button><button>▦&nbsp; Microsoft</button></div><small className="demo-hint">Demo access is pre-filled for Nova Social.</small></div></section></main>;
+  if (!session) return <main className="login-page"><section className="login-story"><div className="brand login-brand"><span className="brand-mark">S</span><span>SafeConnect</span></div><div className="story-copy"><span className="secure-label">ENTERPRISE TRUST &amp; SAFETY</span><h1>Your community.<br/><em>Protected.</em></h1><p>One command center for the people, policies, and decisions that keep your platform safe.</p><div className="trust-points"><span><b>Risk-ranked</b> review queue</span><span><b>Role-based</b> moderator access</span><span><b>Immutable</b> audit trail</span></div></div><div className="story-orbit"><i/><i/><i/></div><small className="story-foot">JWT AUTHENTICATED · TENANT ISOLATED · FULLY AUDITED</small></section><section className="login-panel"><div className="login-box"><span className="step">SECURE WORKSPACE ACCESS</span><h2>Welcome back</h2><p>Sign in with your company credentials.</p><form onSubmit={signIn}><label>Company workspace<input name="workspace" defaultValue="nova-social" placeholder="your-company" required/></label><label>Employee username<input name="username" defaultValue="moderator" placeholder="your.username" required/></label><label>Password<div className="password-wrap"><input name="password" type="password" placeholder="Enter your password" required/><span>◉</span></div></label><div className="login-meta"><label><input type="checkbox" defaultChecked/> Keep me signed in</label></div>{loginError && <div className="login-error">{loginError}</div>}<button className="login-submit" type="submit">Enter workspace <span>→</span></button></form><small className="demo-hint">Demo workspace <b>nova-social</b> — sign in as <b>moderator</b> with password <b>SafeConnect123!</b></small></div></section></main>;
 
   return <main className="app-shell">
     <aside className="sidebar">
@@ -59,12 +80,12 @@ export default function Home() {
       <button className="profile profile-button" onClick={() => {api.logout();setSession(null)}}><span className="avatar small">{session.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</span><div><strong>{session.name}</strong><small>{session.company} · {session.role}</small></div><span>↪</span></button>
     </aside>
     <section className="workspace">
-      <header className="topbar"><div><p className="eyebrow">{session.company.toUpperCase()} / TRUST &amp; SAFETY / {activeNav.toUpperCase()}</p><h1>{activeNav === "Overview" ? `Good morning, ${session.name.split(" ")[0]}.` : activeNav}</h1></div><div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={showNotifications}>♢<i/></button><button className="primary" onClick={() => setReportOpen(true)}>＋ New report</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">{session.company.toUpperCase()} / TRUST &amp; SAFETY / {activeNav.toUpperCase()}</p><h1>{activeNav === "Overview" ? `${greeting()}, ${session.name.split(" ")[0]}.` : activeNav}</h1></div><div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={showNotifications}>♢<i/></button><button className="primary" onClick={() => setReportOpen(true)}>＋ New report</button></div></header>
       <div className="metrics">
-        <article><div className="metric-head"><span>Open cases</span><b className="badge violet">Live</b></div><strong>48</strong><p><em>↓ 12%</em> from last week</p><div className="spark"><i/><i/><i/><i/><i/><i/></div></article>
-        <article><div className="metric-head"><span>Critical priority</span><b className="badge red">Action</b></div><strong>7</strong><p><em className="red-text">↑ 2</em> since yesterday</p><div className="spark red-spark"><i/><i/><i/><i/><i/><i/></div></article>
-        <article><div className="metric-head"><span>Median response</span><b className="badge green">On target</b></div><strong>8m 42s</strong><p><em>↓ 1m 18s</em> this month</p><div className="spark green-spark"><i/><i/><i/><i/><i/><i/></div></article>
-        <article><div className="metric-head"><span>Resolution rate</span><b className="badge blue">30 days</b></div><strong>94.6%</strong><p><em>↑ 3.2%</em> improvement</p><div className="ring"><span>95</span></div></article>
+        <article><div className="metric-head"><span>Open cases</span><b className="badge violet">Live</b></div><strong>{stats.open}</strong><p><em>{caseItems.length}</em> in this workspace</p><div className="spark"><i/><i/><i/><i/><i/><i/></div></article>
+        <article><div className="metric-head"><span>Critical priority</span><b className="badge red">Action</b></div><strong>{stats.critical}</strong><p><em className="red-text">Immediate</em> review needed</p><div className="spark red-spark"><i/><i/><i/><i/><i/><i/></div></article>
+        <article><div className="metric-head"><span>Highest risk</span><b className="badge green">Peak</b></div><strong>{stats.highestRisk}<small style={{fontSize:11,color:"#a09caa"}}>/100</small></strong><p>across open cases</p><div className="spark green-spark"><i/><i/><i/><i/><i/><i/></div></article>
+        <article><div className="metric-head"><span>Resolution rate</span><b className="badge blue">Session</b></div><strong>{stats.rate}%</strong><p><em>{resolved.length}</em> of {caseItems.length} actioned</p><div className="ring" style={{background:`conic-gradient(#6352d7 ${stats.rate}%,#ebe8f5 0)`}}><span>{stats.rate}</span></div></article>
       </div>
       <div className="content-grid">
         <section className="queue panel"><div className="panel-header"><div><h2>{activeNav === "Overview" ? "Priority queue" : activeNav}</h2><p>Live workspace records ranked by risk and urgency</p></div><button className="link-button" onClick={()=>{setQuery("");setFilter("All cases");setActiveNav("Case queue")}}>View all <span>→</span></button></div>
@@ -80,6 +101,6 @@ export default function Home() {
           <div className="action-box"><button className="resolve" onClick={() => act(`${active.id} resolved and archived`, true, "resolve")}>Resolve case</button><button className="escalate" onClick={() => act(`${active.id} escalated to senior review`, false, "escalate")}>Escalate</button></div><button className="history" onClick={() => act("Audit history loaded")}>View full case history <span>→</span></button>
         </aside>
       </div>
-    </section>{reportOpen&&<div className="modal-backdrop" onClick={()=>setReportOpen(false)}><form className="report-modal" onSubmit={submitReport} onClick={e=>e.stopPropagation()}><button type="button" className="modal-close" onClick={()=>setReportOpen(false)}>×</button><span className="step">NEW SAFETY REPORT</span><h2>Report {active.user}</h2><p>Create a real report in the Django moderation workflow.</p><label>Category<select name="category" defaultValue="harassment"><option value="harassment">Harassment</option><option value="threat">Threat</option><option value="hate">Hate speech</option><option value="impersonation">Impersonation</option><option value="spam">Spam</option><option value="other">Other</option></select></label><label>Incident details<textarea name="description" required minLength={10} placeholder="Describe what happened and why it needs review..."/></label><div className="modal-actions"><button type="button" onClick={()=>setReportOpen(false)}>Cancel</button><button className="primary" type="submit">Create report</button></div></form></div>}{toast && <div className="toast"><span>✓</span>{toast}</div>}
+    </section>{reportOpen&&<div className="modal-backdrop" role="presentation" onClick={()=>setReportOpen(false)}><form className="report-modal" onSubmit={submitReport} onClick={e=>e.stopPropagation()}><button type="button" className="modal-close" onClick={()=>setReportOpen(false)}>×</button><span className="step">NEW SAFETY REPORT</span><h2>Report {active.user}</h2><p>Create a real report in the Django moderation workflow.</p><label>Category<select name="category" defaultValue="harassment"><option value="harassment">Harassment</option><option value="threat">Threat</option><option value="hate">Hate speech</option><option value="impersonation">Impersonation</option><option value="spam">Spam</option><option value="other">Other</option></select></label><label>Incident details<textarea name="description" required minLength={10} placeholder="Describe what happened and why it needs review..."/></label><div className="modal-actions"><button type="button" onClick={()=>setReportOpen(false)}>Cancel</button><button className="primary" type="submit">Create report</button></div></form></div>}{toast && <div className="toast"><span>✓</span>{toast}</div>}
   </main>;
 }
